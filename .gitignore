@@ -28,6 +28,7 @@
 
 # big files #
 *.tif
+data/raw/tl_2024_us_county/tl_2024_us_county.shp
 
 # OS generated files #
 ######################
@@ -38,3 +39,4 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+
