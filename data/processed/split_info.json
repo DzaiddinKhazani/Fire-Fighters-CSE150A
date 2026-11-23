@@ -1,0 +1,84 @@
+{
+  "neg_keep": 0.02,
+  "seed": 42,
+  "train_years": [
+    2015,
+    2022
+  ],
+  "test_years": [
+    2023,
+    2024
+  ],
+  "val_years_inside_train": [
+    2021,
+    2022
+  ],
+  "train_rows_before_subsample": 13669116,
+  "train_rows_after_subsample": 275616,
+  "train_fires": 2861,
+  "train_prior_full": 0.000209303952062445,
+  "train_prior_subsampled": 0.010380384302798095,
+  "test_rows": 3419618,
+  "test_fires": 535,
+  "test_prior": 0.00015645022338752458,
+  "prior_correction": "odds_true = odds_model * neg_keep  ->  p = p_s*k / (p_s*k + 1 - p_s), with k = neg_keep",
+  "note": "column 'weight' = 1/neg_keep for kept non-fire rows, 1 for fires, if you prefer weighted counts instead of the prior correction",
+  "states": {
+    "tmax": [
+      "cool",
+      "mild",
+      "hot",
+      "extreme"
+    ],
+    "rhmin": [
+      "crit_dry",
+      "dry",
+      "moderate",
+      "humid"
+    ],
+    "wind": [
+      "calm",
+      "light",
+      "moderate",
+      "strong"
+    ],
+    "elev": [
+      "low",
+      "foothill",
+      "mountain",
+      "high"
+    ],
+    "slope": [
+      "flat",
+      "rolling",
+      "steep",
+      "very_steep"
+    ],
+    "veg_type": [
+      "nonburnable",
+      "shrub",
+      "other_veg",
+      "missing"
+    ],
+    "veg_cover": [
+      "bare",
+      "sparse",
+      "moderate",
+      "dense",
+      "missing"
+    ],
+    "veg_height": [
+      "low",
+      "low_shrub",
+      "tall_shrub",
+      "tree",
+      "missing"
+    ],
+    "burn_hist": [
+      "recent",
+      "mid",
+      "old",
+      "none"
+    ]
+  }
+}

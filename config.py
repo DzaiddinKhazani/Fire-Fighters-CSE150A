@@ -44,7 +44,7 @@ PATHS = dict(
     fires=RAW_DIR / "FPA_FOD_20260615.sqlite",  # USDA FPA FOD 7th ed. SQLite; adjust to the real file name after unzipping
     fires_layer="Fires",
     dem=RAW_DIR / "dem.tif",                     # USGS elevation
-    veg_type=RAW_DIR / "LF2025_EVT_CONUS.tif",       # LANDFIRE existing vegetation type
+    veg_type=RAW_DIR / "LF2025_EVC_CONUS.tif",       # life form is derived from EVC codes (EVT file not needed)
     veg_cover=RAW_DIR / "LF2025_EVC_CONUS.tif",      # LANDFIRE existing vegetation cover
     veg_height=RAW_DIR / "LF2025_EVH_CONUS.tif",     # LANDFIRE existing vegetation height
     gridmet_dir=RAW_DIR / "gridmet",             # files like tmmx_2015.nc
@@ -85,35 +85,60 @@ TERRAIN_VARS = ["elev", "slope"]
 BURN_VARS = ["yrs_since_fire"]           # raw; binned to `burn_hist` in Phase 3
 
 # =====================================================================
-# PHASE 3: DISCRETIZATION  (uncomment after exploring distributions)
+# PHASE 3: DISCRETIZATION  (frozen -- every model uses these exact bins)
 # =====================================================================
-# Bin edges are frozen here so every model uses identical bins.
-# Values below are placeholders to be replaced with domain thresholds or quantiles.
-#
-# BIN_EDGES = {
-#     "tmax":   [-np.inf, 20, 28, 35, np.inf],      # degC
-#     "rhmin":  [-np.inf, 10, 20, 35, np.inf],      # percent (<10 = critically dry)
-#     "wind":   [-np.inf, 3, 6, 9, np.inf],         # m/s
-#     "elev":   [-np.inf, 200, 600, 1200, np.inf],  # m
-#     "slope":  [-np.inf, 5, 15, 25, np.inf],       # degrees
-#     "yrs_since_fire": [-np.inf, 5, 15, 30, np.inf],   # NaN -> its own "no record" bin
-# }
-# CATEGORICAL_COLLAPSE = {
-#     # collapse LANDFIRE codes into a few fuel classes
-#     "veg_type": {},   # e.g. {codes: "chaparral", codes: "grass", codes: "forest", ...}
-# }
-# DISCRETE_FEATURES = ["tmax", "rhmin", "wind", "elev", "slope",
-#                      "veg_type", "veg_cover", "veg_height", "burn_hist"]
+# Edges come from fire-weather thresholds where they exist and from the
+# 2015-2022 distributions otherwise (see results/figures/distributions.png).
+# Bins are right-open: [edge_i, edge_i+1).  NaN gets its own state (below).
+import numpy as np
+
+BIN_EDGES = {
+    "tmax":   [-np.inf, 20, 28, 35, np.inf],       # degC: cool / mild / hot / extreme
+    "rhmin":  [-np.inf, 10, 20, 35, np.inf],       # %: <10 critically dry, <20 red-flag range
+    "wind":   [-np.inf, 2, 3, 4.5, np.inf],        # m/s daily mean: calm / light / moderate / strong
+    "elev":   [-np.inf, 200, 600, 1200, np.inf],   # m: coast-valley / foothill / mountain / high
+    "slope":  [-np.inf, 5, 15, 25, np.inf],        # degrees: flat / rolling / steep / very steep
+    "veg_cover":  [-np.inf, 5, 20, 35, np.inf],    # % canopy: bare / sparse / moderate / dense
+    "veg_height": [-np.inf, 0.5, 1.5, 3, np.inf],  # m: grass-low / low shrub / tall shrub / tree
+    "yrs_since_fire": [-np.inf, 2, 10, np.inf],    # recent / mid / old  (+ "none" if no record)
+}
+BIN_LABELS = {
+    "tmax": ["cool", "mild", "hot", "extreme"],
+    "rhmin": ["crit_dry", "dry", "moderate", "humid"],
+    "wind": ["calm", "light", "moderate", "strong"],
+    "elev": ["low", "foothill", "mountain", "high"],
+    "slope": ["flat", "rolling", "steep", "very_steep"],
+    "veg_cover": ["bare", "sparse", "moderate", "dense"],
+    "veg_height": ["low", "low_shrub", "tall_shrub", "tree"],
+    "yrs_since_fire": ["recent", "mid", "old"],
+}
+# NaN handling: vegetation is missing for the north of the county (bad LANDFIRE
+# clip); burn history is NaN when the cell had no fire since 1992.
+NAN_LABEL = {"veg_type": "missing", "veg_cover": "missing", "veg_height": "missing",
+             "yrs_since_fire": "none"}
+
+# veg_type is the dominant life form (0 none, 1 tree, 2 shrub, 3 herb). Tree and herb
+# cells are rare here (<4% of cells each), so they are merged.
+CATEGORICAL_COLLAPSE = {
+    "veg_type": {0: "nonburnable", 1: "other_veg", 2: "shrub", 3: "other_veg"},
+}
+RENAME_DISCRETE = {"yrs_since_fire": "burn_hist"}
+
+DISCRETE_FEATURES = ["tmax", "rhmin", "wind", "elev", "slope",
+                     "veg_type", "veg_cover", "veg_height", "burn_hist"]
 
 # =====================================================================
 # PHASE 3: TRAIN / TEST SPLIT AND SUBSAMPLING
 # =====================================================================
-# TRAIN_YEARS = range(2015, 2023)     # 2015-2022
-# TEST_YEARS = range(2023, 2025)      # 2023-2024
-# VAL_YEARS = (2021, 2022)            # temporal validation inside the training span
-#
-# NEG_KEEP = 0.02                     # fraction of Fire=0 rows kept in TRAIN only
-#                                     # (test set stays full; prior is corrected afterward)
+TRAIN_YEARS = range(2015, 2023)     # 2015-2022
+TEST_YEARS = range(2023, 2025)      # 2023-2024
+VAL_YEARS = (2021, 2022)            # temporal validation inside the training span
+
+NEG_KEEP = 0.02                     # fraction of fire=0 rows kept in TRAIN only
+                                    # (test set stays full; prior is corrected afterward)
+TRAIN_PATH = PROCESSED_DIR / "train_discrete.parquet"
+TEST_PATH = PROCESSED_DIR / "test_discrete.parquet"
+SPLIT_INFO_PATH = PROCESSED_DIR / "split_info.json"
 
 # =====================================================================
 # PHASE 4: MODEL STRUCTURES
