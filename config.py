@@ -195,15 +195,22 @@ LATENT_DAG_EDGES = (
 ESTIMATORS = {
     "mle": dict(kind="MaximumLikelihoodEstimator"),
     "bdeu": dict(kind="BayesianEstimator", prior_type="BDeu", equivalent_sample_size=10),
+    # Dirichlet prior centred on each variable's marginal instead of uniform: an unseen parent
+    # configuration gets the overall rate (P(fire) ~ 0.0002) instead of BDeu's ~0.5. See bn.py.
+    "dirichlet": dict(kind="Dirichlet, marginal-centred", equivalent_sample_size=10),
 }
 
 # =====================================================================
 # PHASE 5: EVALUATION
 # =====================================================================
-# PROB_CLIP = (1e-6, 1 - 1e-6)        # clip predictions before log-loss
-# CALIBRATION_BINS = 10
-# BOOTSTRAP_REPS = 1000               # CI for metrics when test ignitions are few
+PROB_CLIP = (1e-6, 1 - 1e-6)        # clip predictions before log-loss
+CALIBRATION_BINS = 10               # quantile bins of predicted probability
+BOOTSTRAP_REPS = 1000               # CI for metrics when test ignitions are few
+                                    # (resamples whole test DAYS, since cells on the same day share weather)
 # INDEPENDENCE_ALPHA = 0.05           # chi-square / G-test threshold for edge checks
+MODELS_DIR = RESULTS_DIR / "models"   # fitted CPTs, one pickle per structure x estimator
+PREDICTIONS_PATH = RESULTS_DIR / "test_predictions.parquet"
+FITTED_STRUCTURES = ("naive_bayes", "tan", "expert")   # A-C; D (latent, EM) not fitted yet
 
 # =====================================================================
 # PHASE 6: FHSZ COMPARISON

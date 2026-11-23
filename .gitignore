@@ -43,3 +43,6 @@ data/raw/tl_2024_us_county/tl_2024_us_county.shp
 ehthumbs.db
 Thumbs.db
 
+
+# Phase 5: regenerate with `python evaluate.py` (~55 MB)
+results/test_predictions.parquet
