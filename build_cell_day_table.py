@@ -142,12 +142,45 @@ def load_ignitions(grid):
 
 
 # ----------------------------------------------------------------- 3. static features
-def raster_to_grid(path, grid, resampling):
+LANDFIRE_FILL = -9999   # LANDFIRE marks some pixels -9999 in addition to the file's nodata
+
+
+# LANDFIRE EVC/EVH codes (LF2025 data dictionaries):
+#   < 100  water / snow / developed / barren (no wildland fuel)
+#   1xx    tree   (EVC: % cover = code-100, EVH: height m = code-100)
+#   2xx    shrub  (EVC: % cover = code-200, EVH: height m = (code-200)/10)
+#   3xx    herb   (EVC: % cover = code-300, EVH: height m = (code-300)/10)
+# Taking the per-cell MODE of raw codes is biased: shrub cover is spread over ~90
+# codes (one per percent) while "Developed-Roads" is a single code, so roads won
+# cells that were mostly shrub. So we convert codes to physical values first.
+def lf_lifeform(code):   # 0 none, 1 tree, 2 shrub, 3 herb
+    return np.where(code < 100, 0, np.where(code < 400, code // 100, np.nan))
+
+
+def lf_cover_pct(code):  # non-vegetated pixels count as 0 % cover
+    return np.where(code < 100, 0, np.where(code < 400, code % 100, np.nan))
+
+
+def lf_height_m(code):
+    life = code // 100
+    return np.where(code < 100, 0,
+           np.where(life == 1, code - 100,
+           np.where((life == 2) | (life == 3), (code % 100) / 10, np.nan)))
+
+
+def raster_to_grid(path, grid, resampling, landfire=None):
     dst = np.full((grid.nrows, grid.ncols), np.nan, dtype="float32")
     with rasterio.open(path) as src:
+        if landfire is not None:   # county-sized clip: read, convert codes, then resample
+            band = src.read(1).astype("float32")
+            band[(band == LANDFIRE_FILL) | (band == src.nodata)] = np.nan
+            band = landfire(band).astype("float32")
+            source = dict(source=band, src_transform=src.transform, src_crs=src.crs,
+                          src_nodata=np.nan)
+        else:          # DEM is ~1.4 billion pixels: stream it from disk
+            source = dict(source=rasterio.band(src, 1), src_nodata=src.nodata)
         reproject(
-            source=rasterio.band(src, 1), destination=dst,
-            src_nodata=src.nodata, dst_nodata=np.nan,
+            **source, destination=dst, dst_nodata=np.nan,
             dst_transform=grid.transform, dst_crs=CRS, resampling=resampling,
         )
     return dst
@@ -176,9 +209,13 @@ def load_static(grid):
         "elev": raster_to_grid(PATHS["dem"], grid, Resampling.average),
         "slope": slope_to_grid(PATHS["dem"], grid),
         # categorical / ordinal rasters: most common value in the cell
-        "veg_type": raster_to_grid(PATHS["veg_type"], grid, Resampling.mode),
-        "veg_cover": raster_to_grid(PATHS["veg_cover"], grid, Resampling.mode),
-        "veg_height": raster_to_grid(PATHS["veg_height"], grid, Resampling.mode),
+        # veg_type   = dominant life form (0 none, 1 tree, 2 shrub, 3 herb), from EVC codes
+        # veg_cover  = mean canopy cover over the cell, %   (fuel continuity)
+        # veg_height = mean vegetation height over the cell, m
+        # (raw EVT codes are not used: the clipped files ship without a legend)
+        "veg_type": raster_to_grid(PATHS["veg_cover"], grid, Resampling.mode, lf_lifeform),
+        "veg_cover": raster_to_grid(PATHS["veg_cover"], grid, Resampling.average, lf_cover_pct),
+        "veg_height": raster_to_grid(PATHS["veg_height"], grid, Resampling.average, lf_height_m),
     }
     # flatten to one value per valid cell, same order as grid.ids
     return {k: v.ravel()[grid.ids] for k, v in static.items()}
@@ -189,14 +226,23 @@ def load_weather(year, grid):
     """Return (dates, {var: array[n_days, n_cells]}).
     gridMET is ~4 km, so many cells share a pixel."""
     lon, lat = Transformer.from_crs(CRS, "EPSG:4326", always_xy=True).transform(grid.x, grid.y)
-    lat_da = xr.DataArray(lat, dims="cell")
-    lon_da = xr.DataArray(lon, dims="cell")
+    lon, lat = np.asarray(lon), np.asarray(lat)
 
     out, dates = {}, None
     for name, (stem, var) in GRIDMET.items():
         with xr.open_dataset(PATHS["gridmet_dir"] / f"{stem}_{year}.nc") as ds:
-            pts = ds[var].sel(lat=lat_da, lon=lon_da, method="nearest")
-            arr = pts.transpose("day", "cell").values.astype("float32")
+            # Coastal cells: the nearest gridMET pixel can be ocean (all NaN).
+            # Snap every cell to the nearest pixel that has data instead.
+            da = ds[var].transpose("day", "lat", "lon")
+            valid = da.notnull().any("day").values               # (lat, lon)
+            glon, glat = np.meshgrid(ds["lon"].values, ds["lat"].values)
+            vi, vj = np.nonzero(valid)
+            coslat = np.cos(np.radians(lat.mean()))
+            d2 = ((lon[:, None] - glon[vi, vj][None, :]) * coslat) ** 2 + \
+                 (lat[:, None] - glat[vi, vj][None, :]) ** 2
+            k = d2.argmin(axis=1)
+            data = da.values                                     # (day, lat, lon)
+            arr = data[:, vi[k], vj[k]].astype("float32")         # (day, cell)
             if name == "tmax":
                 arr = arr - 273.15                      # K -> degC
             out[name] = arr

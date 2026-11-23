@@ -7,32 +7,7 @@ Prints OK / PROBLEM for every input so you can fix paths and names in config.py.
 Untested sketch.
 """
 import geopandas as gpd
-import rasterio
-import xarray as xr
-from pyogrio import list_layers, read_dataframe, read_info
-from rasterio.warp import transform_bounds
-
-from config import (COUNTY_NAME, COUNTY_STATE_FIPS, FIRE_FIELDS, GRIDMET, PATHS,
-                    YEARS)
-
-problems = []
-
-
-def report(ok, msg):
-    print(("  OK       " if ok else "  PROBLEM  ") + msg)
-    if not ok:
-        problems.append(msg)
-
-
-"""
-Pre-flight check for Phase 2. Run this BEFORE build_cell_day_table.py:
-
-    python check_inputs.py
-
-Prints OK / PROBLEM for every input so you can fix paths and names in config.py.
-Untested sketch.
-"""
-import geopandas as gpd
+import numpy as np
 import rasterio
 import xarray as xr
 from pyogrio import list_layers, read_dataframe, read_info
@@ -121,6 +96,20 @@ for key in ["dem", "veg_type", "veg_cover", "veg_height"]:
                     print(f"           note: DEM is {px/1e6:.0f}M pixels; cropping it to the county speeds things up")
             else:
                 report(px < 4e8, f"{key}: size looks clipped (not full CONUS)")
+            if county_bounds and key != "dem":
+                # The bounding box can look fine while the inside is nodata
+                # (that is how the first LANDFIRE clip was broken), so sample
+                # actual pixel values on a grid over the county's land area.
+                from shapely.geometry import Point
+                land = c.to_crs(src.crs).geometry.iloc[0]
+                xs = np.linspace(land.bounds[0], land.bounds[2], 60)
+                ys = np.linspace(land.bounds[1], land.bounds[3], 60)
+                pts = [(x, y) for x in xs for y in ys if land.contains(Point(x, y))]
+                vals = np.array([v[0] for v in src.sample(pts)])
+                bad = int(np.isin(vals, [src.nodata, -9999]).sum())   # LANDFIRE uses both
+                frac = bad / max(len(pts), 1)
+                report(frac < 0.15, f"{key}: {frac:.0%} of sample points inside the county are nodata "
+                                    "(expect only ocean, roughly <15%)")
             if county_bounds:
                 b = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
                 print(f"           {key} extent (lon/lat): {tuple(round(x, 3) for x in b)}")
