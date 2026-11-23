@@ -112,8 +112,7 @@ BIN_LABELS = {
     "veg_height": ["low", "low_shrub", "tall_shrub", "tree"],
     "yrs_since_fire": ["recent", "mid", "old"],
 }
-# NaN handling: vegetation is missing for the north of the county (bad LANDFIRE
-# clip); burn history is NaN when the cell had no fire since 1992.
+# burn history is NaN when the cell had no fire since 1992.
 NAN_LABEL = {"veg_type": "missing", "veg_cover": "missing", "veg_height": "missing",
              "yrs_since_fire": "none"}
 
@@ -143,32 +142,60 @@ SPLIT_INFO_PATH = PROCESSED_DIR / "split_info.json"
 # =====================================================================
 # PHASE 4: MODEL STRUCTURES
 # =====================================================================
-# NAIVE_BAYES_EDGES = [("fire", f) for f in DISCRETE_FEATURES]
-#
-# EXPERT_EDGES = [
-#     # terrain -> weather / vegetation
-#     ("elev", "tmax"),
-#     ("elev", "veg_type"),
-#     ("slope", "veg_type"),
-#     # vegetation structure
-#     ("veg_type", "veg_cover"),
-#     ("veg_cover", "veg_height"),
-#     ("burn_hist", "veg_cover"),
-#     # weather interactions
-#     ("tmax", "rhmin"),
-#     # drivers of ignition
-#     ("tmax", "fire"),
-#     ("rhmin", "fire"),
-#     ("wind", "fire"),
-#     ("veg_type", "fire"),
-#     ("veg_cover", "fire"),
-#     ("slope", "fire"),
-# ]
-#
-# ESTIMATORS = {
-#     "mle": dict(kind="MaximumLikelihoodEstimator"),
-#     "bdeu": dict(kind="BayesianEstimator", prior_type="BDeu", equivalent_sample_size=10),
-# }
+NAIVE_BAYES_EDGES = [("fire", f) for f in DISCRETE_FEATURES]
+
+TAN_ROOT = "elev" # tree root (terrain is upstream of everything)
+
+# C. Expert DAG
+#    fire gets 5 parents (4*4*4*4*4 = 1024 parent configurations)
+EXPERT_EDGES = [
+    # terrain
+    ("elev", "slope"),          # higher ground in San Diego is mountain terrain, more rugged than the coastal plain
+    ("elev", "tmax"),           # air cools with altitude (lapse rate); the coast is moderated by the ocean
+    # vegetation
+    ("elev", "veg_type"),       # elevation zones set the plant community: developed/grass low, chaparral mid, conifers high
+    ("slope", "veg_type"),      # steep slopes are hard to build on or farm, so they stay in wildland shrub
+    ("burn_hist", "veg_type"),  # frequent fire converts chaparral to annual grass (type conversion)
+    ("veg_type", "veg_cover"),  # life form limits canopy cover (shrubland closes; grass/developed land stays open)
+    ("veg_type", "veg_height"), # life form sets the height range: trees > shrubs > herbs
+    ("burn_hist", "veg_cover"), # a recently burned cell has not regrown its canopy yet
+    # weather
+    ("tmax", "rhmin"),          # hotter air at the same moisture has lower relative humidity
+    ("wind", "rhmin"),          # strong offshore (Santa Ana) winds bring very dry desert air
+    # drivers of ignition
+    ("tmax", "fire"),           # heat dries fine fuels and coincides with peak outdoor activity
+    ("rhmin", "fire"),          # dry air lowers fuel moisture, making fuels easier to ignite
+    ("veg_type", "fire"),       # fuel type sets ignitability; developed/roadside land is where people start fires
+    ("burn_hist", "fire"),      # ignitions recur in the same places (roads, WUI edges): past fire marks hotspots
+    ("slope", "fire"),          # most ignitions are human; steep terrain has little access and few people
+]
+# Omissions:
+#  - wind -> fire: FPA-FOD records ignitions, and daily mean wind mostly drives spread,
+#    not ignition; wind still reaches fire through rhmin.
+#  - elev -> fire: its effect runs through tmax, veg_type and slope.
+#  - veg_cover / veg_height -> fire: the model claims they add nothing once veg_type
+#    and burn_hist are known. Testable with a conditional independence test (Phase 5).
+
+# D. Expert DAG + latent "danger" node: a hidden daily fire-weather regime
+#    (e.g. Santa Ana vs onshore marine layer) that drives all three weather
+#    variables and fire. Weather->fire edges are replaced by danger->fire.
+LATENT = "danger"
+LATENT_CARDS = (2, 3, 4)            # fit one model per state count with EM
+LATENT_EDGES = [
+    (LATENT, "tmax"),               # a hot regime (offshore flow) raises temperature across the county
+    (LATENT, "rhmin"),              # the same regime brings dry air
+    (LATENT, "wind"),               # Santa Ana regimes are windy; marine-layer days are calm
+    (LATENT, "fire"),               # ignition odds depend on the regime as a whole, not one weather reading
+]
+LATENT_DAG_EDGES = (
+    [(a, b) for a, b in EXPERT_EDGES if not (a in WEATHER_VARS and b == "fire")]
+    + LATENT_EDGES
+)
+
+ESTIMATORS = {
+    "mle": dict(kind="MaximumLikelihoodEstimator"),
+    "bdeu": dict(kind="BayesianEstimator", prior_type="BDeu", equivalent_sample_size=10),
+}
 
 # =====================================================================
 # PHASE 5: EVALUATION
