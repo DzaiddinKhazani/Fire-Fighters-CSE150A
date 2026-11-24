@@ -29,10 +29,8 @@
 We model the daily probability that a wildfire starts in each one-square-mile cell of San Diego
 County from weather, terrain, vegetation and the cell's fire history. Using ten years of ignition
 records (2015--2024) joined to gridded weather, elevation and vegetation data, we build a
-17-million-row cell-day table and compare eight discrete Bayesian network structures: Naive Bayes,
-Tree-Augmented Naive Bayes, a hand-built expert DAG, three variants of it that each test one
-hypothesis, a structure learned by BIC hill climbing, and the expert DAG with a latent weather
-regime learned by EM. On held-out years 2023--2024 the learned structure performs best (ROC-AUC
+17-million-row cell-day table and compare eight discrete Bayesian network structures, including
+hand-built, data-learned (BIC hill climbing) and latent-variable (EM) networks. On held-out years 2023--2024 the learned structure performs best (ROC-AUC
 0.829). Conditional independence tests and the structure experiments agree: recent fire history
 is by far the strongest signal, temperature adds some information, and humidity, wind and
 vegetation add little once these are known.
@@ -53,8 +51,7 @@ This is a natural problem for probabilistic reasoning. Ignitions are rare (about
 cell-days) and noisy, so a model must express uncertainty rather than make hard predictions. The
 drivers are also connected to each other: elevation shapes temperature and vegetation, temperature
 shapes humidity, and past fires change the vegetation. A Bayesian network lets us write these
-relationships down, learn them from data, answer queries with some variables unobserved, and test
-whether the assumed dependencies hold.
+relationships down, learn them, query with variables unobserved, and test the assumed dependencies.
 
 Our proposal also planned to compare the model's risk estimates with CAL FIRE's Fire Hazard
 Severity Zones (FHSZ). Following our TA's feedback that a direct comparison would be hard to
@@ -147,20 +144,20 @@ shows C and H and Figure~\ref{fig:dags_app} (appendix) the rest.
 \begin{table}[htb]
 \centering
 \small
-\begin{tabular}{ll}
+\begin{tabular}{llr}
 \toprule
-Structure & Parents of \texttt{fire} \\
+Structure & Parents of \texttt{fire} & Rows \\
 \midrule
-A, B & none (\texttt{fire} is the parent of every feature) \\
-C. Expert & tmax, rhmin, veg\_type, burn\_hist, slope \\
-D. Latent & \texttt{danger}, veg\_type, burn\_hist, slope \\
-E. Fuel structure & rhmin, veg\_type, veg\_cover, veg\_height, burn\_hist \\
-F. No weather & veg\_type, burn\_hist, slope \\
-G. Fuel + history & veg\_type, veg\_cover, veg\_height, burn\_hist \\
-H. Hill climbing & tmax, burn\_hist \\
+A, B & none (\texttt{fire} is the parent of every feature) & 1 \\
+C. Expert & tmax, rhmin, veg\_type, burn\_hist, slope & 1,024 \\
+D. Latent & \texttt{danger}, veg\_type, burn\_hist, slope & $64K$ \\
+E. Fuel structure & rhmin, veg\_type, veg\_cover, veg\_height, burn\_hist & 1,600 \\
+F. No weather & veg\_type, burn\_hist, slope & 64 \\
+G. Fuel + history & veg\_type, veg\_cover, veg\_height, burn\_hist & 400 \\
+H. Hill climbing & tmax, burn\_hist & 16 \\
 \bottomrule
 \end{tabular}
-\caption{Parents of \texttt{fire} in each structure. C--G share the expert edges among the features (E and G also add veg\_cover $\to$ veg\_height).}
+\caption{Parents of \texttt{fire} in each structure. C--G share the expert edges among the features (E and G also add veg\_cover $\to$ veg\_height). Rows = parent configurations in fire's CPT.}
 \label{tab:parents}
 \end{table}
 
@@ -251,20 +248,21 @@ is \emph{worse} than Naive Bayes ($+3.4\times10^{-5}$): its tree is chosen to ca
 among the features, not to predict \texttt{fire}. The learned structure H is the best model: it beats C
 on log-loss by $2.4\times10^{-5}$ [$1.1, 3.7$]$\times10^{-5}$ and on ROC-AUC by 0.015 [0.005, 0.025],
 and edges past logistic regression. It gives \texttt{fire} only two parents, burn\_hist and tmax, so
-its fire CPT has 16 well-populated rows instead of C's 1,024.
+its fire CPT has 16 well-populated rows instead of C's 1,024. Larger fire tables overfit:
+measured as the log-loss improvement over the constant predictor, C gains 9.9\% on training data
+but only 6.5\% on test data and E 8.8\% vs.\ 5.5\%, while H's 8.2\% carries over almost fully
+(8.1\%). With about 2,900 training fires, C's table averages $\sim$3 fires per row and H's $\sim$180.
 
 \textbf{What the variants show.} F, which drops all weather edges, has the same log-loss as C
-(difference not significant) but significantly lower ROC-AUC ($-0.015$) and PR-AUC: weather,
+(difference not significant) but significantly lower ROC-AUC ($-0.015$) and PR-AUC (by about 30\%): weather,
 through temperature, helps \emph{rank} risky days even if it barely changes average accuracy. E, which
 swaps temperature and slope for vegetation cover and height, is significantly worse on ROC-AUC
 ($-0.017$); more detail on fuel does not replace temperature. G (fuel and history only) is similar: significantly lower PR-AUC, with a ROC-AUC difference that is not significant.
 
-\textbf{Estimators.} For A and B the three estimators agree to three digits, since every parent
-configuration is well populated. For C they do not: 343 of fire's 1,024 parent configurations never
-occur in training, MLE and BDeu set these to $P(\text{fire})=0.5$, and the model's overall fire rate
-rises to 0.00047, more than twice the true 0.00021. The marginal Dirichlet prior restores 0.000217
-and the best log-loss. H avoids the problem: with two parents all three estimators give the same
-results.
+\textbf{Estimators.} For A, B and H the three estimators agree to three digits, since every parent
+configuration is well populated. For C, 343 of fire's 1,024 parent configurations never occur in
+training; MLE and BDeu set these to $P(\text{fire})=0.5$, more than doubling the overall fire rate
+(0.00047 vs.\ 0.00021), while the marginal Dirichlet prior restores 0.000217 and the best log-loss.
 
 \textbf{What the models learned.} Fire history dominates: 46\% of training fires occur in cells with
 an ignition in the previous two years (10\% of cell-days), and only 6.5\% in cells with no fire since
@@ -273,9 +271,10 @@ people along roads and the wildland--urban edge. Weather is weaker than expected
 highest ignition rate, but critically dry, extreme-heat and strong-wind days are \emph{below} average
 (Figure~\ref{fig:binrates}, appendix), plausibly because FPA-FOD records ignitions, and extreme
 weather mainly makes fires grow. Steep slopes have far fewer ignitions, consistent with human access.
-Querying with everything else summed out, C says a hot/dry/windy day is 4.9 times riskier than a
-cool/humid/calm day while Naive Bayes says 1.2; C's sparse fire CPT overstates the weather effect
-($P(\text{rhmin}=\text{crit\_dry}\mid\text{fire})=0.15$ vs.\ 0.093 in the data).
+H's fire CPT (Table~\ref{tab:hcpt}, appendix) makes the trade-off concrete: a recent ignition in
+the cell raises the daily rate about 30--60 times compared with no fire since 1992, while going
+from cool to hot raises it 3--5 times. Only 3.3\% of the county's recorded ignitions have a
+natural cause, so fire history most likely stands in for where people are.
 
 \textbf{Testing C's assumptions.} (Table~\ref{tab:ci}, appendix.) Leaving wind out of fire's parents
 is supported ($p=0.097$), but elevation and vegetation cover still carry information given the
@@ -301,10 +300,10 @@ counting (seconds); hill climbing takes 29 moves, and the two edges into \texttt
 $\sim$0.15 s per iteration. Its log-likelihood rises steeply for about 20 iterations and then
 flattens (\texttt{results/figures/em\_convergence.png}); for $K=2$ one of three random starts ended in
 a clearly worse local optimum, and for $K=3,4$ runs hit the 400-iteration cap with starts still
-disagreeing, so more restarts would help. Test evaluation with 1,000 bootstrap replicates takes
-about 1.5 minutes. The limit is data, not computation: CPT size grows as $4^k$ in the number of
+disagreeing, so more restarts would help. The limit is data, not computation: CPT size grows as $4^k$ in the number of
 parents while we have 2,861 training fires, which is why the sparse structures (H, Naive Bayes) are
-the most stable. Finally, 2023--2024 had fewer fires than the training years (0.00016 vs 0.00021),
+the most stable. The learned structure is itself stable: fire's parents are \{burn\_hist, tmax\}
+for parent limits of 2--5, for different training years and across 10 bootstrap resamples. Finally, 2023--2024 had fewer fires than the training years (0.00016 vs 0.00021),
 so every model over-predicts slightly on the test set (Figure~\ref{fig:calib}, appendix).
 
 % ---------------------------------------------------------------------
@@ -464,5 +463,20 @@ edge added, dashed grey = edge removed), and (D) expert DAG with the latent \tex
 weighted). State 0: cool/humid/windy; state 1: warm/dry; state 2: hot.}
 \label{fig:months}
 \end{figure}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Fire history & cool & mild & hot & extreme \\
+\midrule
+Ignition in last 2 years & 4.5 & 9.2 & 14.7 & 17.0 \\
+No fire since 1992 & 0.1 & 0.3 & 0.5 & 0.3 \\
+\bottomrule
+\end{tabular}
+\caption{Fires per 10,000 cell-days in H's fire CPT by temperature, for the two extreme
+fire-history states.}
+\label{tab:hcpt}
+\end{table}
 
 \end{document}
