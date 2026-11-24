@@ -13,8 +13,7 @@ digraph "hillclimb" {
   "veg_height" [fillcolor="#CFE2F3"];
   "veg_type" [fillcolor="#CFE2F3"];
   "wind" [fillcolor="#FDE2C2"];
-  { rank=same; "elev"; "wind"; "burn_hist"; }
-  "burn_hist" -> "fire";
+  "burn_hist" -> "fire" [color="#C0392B", penwidth=2];
   "burn_hist" -> "slope";
   "elev" -> "burn_hist";
   "elev" -> "slope";
@@ -28,7 +27,7 @@ digraph "hillclimb" {
   "rhmin" -> "veg_type";
   "rhmin" -> "wind";
   "tmax" -> "elev";
-  "tmax" -> "fire";
+  "tmax" -> "fire" [color="#C0392B", penwidth=2];
   "tmax" -> "veg_cover";
   "tmax" -> "veg_type";
   "veg_cover" -> "burn_hist";
@@ -42,5 +41,6 @@ digraph "hillclimb" {
   "wind" -> "elev";
   "wind" -> "tmax";
   "wind" -> "veg_type";
+  _note [shape=plaintext, style="", label="red = fire's parents", fontsize=11, fontcolor="#52514e"];
   subgraph cluster_legend { label="Legend"; fontsize=12; style=rounded; "_weather" [label="weather", fillcolor="#FDE2C2", shape=box, fontsize=10]; "_terrain" [label="terrain", fillcolor="#D9EAD3", shape=box, fontsize=10]; "_fuel" [label="fuel", fillcolor="#CFE2F3", shape=box, fontsize=10]; "_history" [label="history", fillcolor="#EADCF8", shape=box, fontsize=10]; "_target" [label="target", fillcolor="#F4CCCC", shape=box, fontsize=10]; }
 }

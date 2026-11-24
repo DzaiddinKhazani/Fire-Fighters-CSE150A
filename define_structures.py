@@ -53,7 +53,7 @@ def learn_tan(train):
 
 
 # Draw diagrams using DOT 
-def draw(name, title, edges, highlight=(), labels=None, rankdir="TB"):
+def draw(name, title, edges, highlight=(), labels=None, rankdir="TB", removed=(), note=None):
     nodes = sorted({n for e in edges for n in e})
     lines = [f'digraph "{name}" {{', f'  rankdir={rankdir}; labelloc=t; fontsize=20;',
              f'  label="{title}"; fontname="Helvetica";',
@@ -63,12 +63,16 @@ def draw(name, title, edges, highlight=(), labels=None, rankdir="TB"):
         extra = ', style="filled,dashed", penwidth=2' if n == LATENT else ""
         shape = ', shape=doubleoctagon' if n == TARGET else ""
         lines.append(f'  "{n}" [fillcolor="{GROUP_COLOR[GROUP[n]]}"{extra}{shape}];')
-    if name in ("expert", "latent", "hillclimb", *EXPERIMENTAL_STRUCTURES):   # keep layers readable: drivers on top, fire at bottom
+    if name in ("expert", "latent", *EXPERIMENTAL_STRUCTURES):   # keep layers readable: drivers on top, fire at bottom
         lines.append('  { rank=same; "elev"; "wind"; "burn_hist"; }')
     for a, b in edges:
         style = ' [color="#C0392B", penwidth=2]' if (a, b) in highlight else ""
         lab = f' [label="{labels[(a, b)]}", fontsize=10]' if labels and (a, b) in labels else ""
         lines.append(f'  "{a}" -> "{b}"{style or lab};')
+    for a, b in removed:   # edges of the expert DAG that this structure drops
+        lines.append(f'  "{a}" -> "{b}" [color="#B5B5B5", style=dashed, arrowhead=empty];')
+    if note:
+        lines.append(f'  _note [shape=plaintext, style="", label="{note}", fontsize=11, fontcolor="#52514e"];')
     lines.append(
         '  subgraph cluster_legend { label="Legend"; fontsize=12; style=rounded; '
         + " ".join(f'"_{k}" [label="{k}", fillcolor="{c}", shape=box, fontsize=10];'
@@ -128,9 +132,16 @@ def main():
          [tuple(e) for e in LATENT_DAG_EDGES],
          highlight=set(LATENT_EDGES))
 
+    # E-G: red = edge not in the expert DAG (C), dashed grey = expert edge this structure drops
+    expert = {tuple(e) for e in EXPERT_EDGES}
     for key, (title, edges) in EXPERIMENTAL_STRUCTURES.items():
-        draw(key, title, edges)
-    draw("hillclimb", "H. Hill climbing with BIC (learned from 2015-2022 data)", hc_edges)
+        es = {tuple(e) for e in edges}
+        draw(key, title, edges, highlight=es - expert, removed=sorted(expert - es),
+             note="red = added vs. expert DAG (C)\\ndashed grey = removed vs. C")
+    # H: red = fire's parents (fire depends only on these two)
+    draw("hillclimb", "H. Hill climbing with BIC (learned from 2015-2022 data)", hc_edges,
+         highlight={e for e in hc_edges if e[1] == TARGET},
+         note="red = fire's parents")
 
     print("TAN tree (parent -> child, I(X;Y|fire) in nats):")
     for e, v in tan_w.items():

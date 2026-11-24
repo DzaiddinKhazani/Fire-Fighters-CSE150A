@@ -28,5 +28,9 @@ python evaluate.py     # test-set predictions, baselines, metrics + bootstrap CI
   -> `results/latent_em.md`, `results/models/latent_k*.pkl`, `results/figures/em_convergence.png`.
 - Conditional-independence tests on the expert DAG: `python independence_tests.py`
   -> `results/independence_tests_expert.md`.
+- Generalization (train vs test log-loss gain per structure, fire CPT of H):
+  `python generalization.py` -> `results/generalization.md`.
+- Stability of the hill-climbing structure (max parents 2-5, two halves of the training years,
+  10 bootstrap resamples): `python hillclimb_stability.py` -> `results/hillclimb_stability.md`.
 - Report source: `report/report.tex` (figures in `report/figures/`).
 - Not done yet: Phase 6 (FHSZ comparison).

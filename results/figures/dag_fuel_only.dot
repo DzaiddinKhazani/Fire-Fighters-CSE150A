@@ -24,10 +24,14 @@ digraph "fuel_only" {
   "burn_hist" -> "veg_cover";
   "tmax" -> "rhmin";
   "wind" -> "rhmin";
-  "veg_cover" -> "veg_height";
+  "veg_cover" -> "veg_height" [color="#C0392B", penwidth=2];
   "veg_type" -> "fire";
-  "veg_cover" -> "fire";
-  "veg_height" -> "fire";
+  "veg_cover" -> "fire" [color="#C0392B", penwidth=2];
+  "veg_height" -> "fire" [color="#C0392B", penwidth=2];
   "burn_hist" -> "fire";
+  "rhmin" -> "fire" [color="#B5B5B5", style=dashed, arrowhead=empty];
+  "slope" -> "fire" [color="#B5B5B5", style=dashed, arrowhead=empty];
+  "tmax" -> "fire" [color="#B5B5B5", style=dashed, arrowhead=empty];
+  _note [shape=plaintext, style="", label="red = added vs. expert DAG (C)\ndashed grey = removed vs. C", fontsize=11, fontcolor="#52514e"];
   subgraph cluster_legend { label="Legend"; fontsize=12; style=rounded; "_weather" [label="weather", fillcolor="#FDE2C2", shape=box, fontsize=10]; "_terrain" [label="terrain", fillcolor="#D9EAD3", shape=box, fontsize=10]; "_fuel" [label="fuel", fillcolor="#CFE2F3", shape=box, fontsize=10]; "_history" [label="history", fillcolor="#EADCF8", shape=box, fontsize=10]; "_target" [label="target", fillcolor="#F4CCCC", shape=box, fontsize=10]; }
 }
