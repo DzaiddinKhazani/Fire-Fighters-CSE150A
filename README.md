@@ -2,13 +2,20 @@
 
 SQLite file, tif files and county shp file are not tracked due to size so download that on your own device. It's in the google drive.
 
-## Fitting and evaluation (todo phases 4-5, models A-C)
+## Fitting and evaluation (todo phases 4-5, models A-C and E-H)
 
 ```bash
 pip install -r requirements.txt
+python define_structures.py   # A-H edge lists + diagrams -> results/structures.json, results/figures/dag_*.png
 python fit_models.py   # fits A-C x {mle, bdeu, dirichlet} -> results/models/, results/sanity_queries.md
 python evaluate.py     # test-set predictions, baselines, metrics + bootstrap CIs -> results/metrics.md, figures
 ```
+
+- Experimental structures (`config.py`): E fuel-structure DAG, F expert DAG without weather -> fire,
+  G fuel + burn history only. Each changes one idea relative to the expert DAG (C);
+  `results/metrics.md` has a table of their differences from C.
+- H hill climbing (`structure_search.py`): greedy add/remove/reverse edge search scored by BIC,
+  max 4 parents per node, learned from the training years only.
 
 - `bn.py`: CPT fitting from weighted counts (the `weight` column undoes the 2% non-fire
   subsampling, so no separate prior correction is needed) and exact inference by

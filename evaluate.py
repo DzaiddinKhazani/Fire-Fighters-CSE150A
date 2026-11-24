@@ -31,7 +31,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 from bn import BayesNet
 from config import (BOOTSTRAP_REPS, CALIBRATION_BINS, DISCRETE_FEATURES, ESTIMATORS,
-                    FIGURES_DIR, FITTED_STRUCTURES, MODELS_DIR, PREDICTIONS_PATH, PROB_CLIP,
+                    FIGURES_DIR, EXPERIMENTAL_STRUCTURES, FITTED_STRUCTURES, MODELS_DIR, PREDICTIONS_PATH, PROB_CLIP,
                     RESULTS_DIR, SEED, TARGET, TEST_PATH, TRAIN_PATH)
 
 METRICS = ["log_loss", "brier", "pr_auc", "roc_auc"]
@@ -151,6 +151,12 @@ def results_table(point, reps):
                 row.update({f"{k}_vs_nb": point[m][k] - point[base][k],
                             f"{k}_vs_nb_lo": np.percentile(d, 2.5),
                             f"{k}_vs_nb_hi": np.percentile(d, 97.5)})
+            ref = f"expert_{est}"
+            if s in EXPERIMENTAL_STRUCTURES or s == "hillclimb":   # E-H, compared against C
+                d = reps[m][k] - reps[ref][k]
+                row.update({f"{k}_vs_expert": point[m][k] - point[ref][k],
+                            f"{k}_vs_expert_lo": np.percentile(d, 2.5),
+                            f"{k}_vs_expert_hi": np.percentile(d, 97.5)})
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -172,6 +178,13 @@ def markdown(df, test):
             "| model | " + " | ".join(METRICS) + " |", "|---|" + "---|" * len(METRICS)]
     for _, r in df[df.log_loss_vs_nb.notna()].iterrows():
         out.append(f"| {r.model} | " + " | ".join(cell(r, k, "_vs_nb") for k in METRICS) + " |")
+    if "log_loss_vs_expert" in df:
+        out += ["\n## Experimental structures (E-H): difference from the expert DAG (C), same estimator\n",
+                "E-G each change one idea relative to C; H is learned from data. Negative log-loss/Brier or positive "
+                "PR-AUC/ROC-AUC = the change helped.\n",
+                "| model | " + " | ".join(METRICS) + " |", "|---|" + "---|" * len(METRICS)]
+        for _, r in df[df.log_loss_vs_expert.notna()].iterrows():
+            out.append(f"| {r.model} | " + " | ".join(cell(r, k, "_vs_expert") for k in METRICS) + " |")
     return "\n".join(out) + "\n"
 
 

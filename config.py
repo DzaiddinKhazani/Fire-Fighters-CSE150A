@@ -192,6 +192,50 @@ LATENT_DAG_EDGES = (
     + LATENT_EDGES
 )
 
+# ---------------------------------------------------------------------
+# Experimental structures (E-G). Each changes ONE idea relative to the expert DAG (C),
+# so a score difference against C can be attributed to that idea.
+# ---------------------------------------------------------------------
+_EXPERT_INTO_FIRE = [(a, b) for a, b in EXPERT_EDGES if b == "fire"]
+_EXPERT_NON_FIRE = [(a, b) for a, b in EXPERT_EDGES if b != "fire"]
+
+# E. Fuel-structure DAG: does the full fuel description (type + cover + height) predict
+#    ignition better than type alone? Fire's parents swap tmax and slope for veg_cover and
+#    veg_height, keeping rhmin as the one weather input (4*5*5*4*4 = 1600 configurations).
+FUEL_EDGES = _EXPERT_NON_FIRE + [
+    ("veg_cover", "veg_height"),  # denser canopy goes with taller plants (strongest Chow-Liu link, 0.66 nats)
+    ("veg_type", "fire"),
+    ("veg_cover", "fire"),        # more continuous fuel bed -> an ember or spark finds fuel
+    ("veg_height", "fire"),       # grass/low shrub cures fast and ignites easily; tall shrub/tree less so
+    ("burn_hist", "fire"),
+    ("rhmin", "fire"),
+]
+
+# F. No-weather DAG: the expert DAG with every weather -> fire edge removed.
+#    If F scores the same as C, the daily weather adds nothing to ignition prediction.
+NO_WEATHER_EDGES = [(a, b) for a, b in EXPERT_EDGES if not (a in WEATHER_VARS and b == "fire")]
+
+# G. Fuel + history only: fire depends only on what is on the ground and where fires
+#    started before (4*5*5*4 = 400 configurations). The leanest "human ignition" story.
+FUEL_ONLY_EDGES = _EXPERT_NON_FIRE + [
+    ("veg_cover", "veg_height"),
+    ("veg_type", "fire"),
+    ("veg_cover", "fire"),
+    ("veg_height", "fire"),
+    ("burn_hist", "fire"),
+]
+
+# H. Hill climbing (structure_search.py): no hand-picked edges at all. Greedy search over
+#    add / remove / reverse edge moves, scored by BIC on the training data. Max parents per
+#    node keeps every table estimable.
+HILLCLIMB_MAX_PARENTS = 4
+
+EXPERIMENTAL_STRUCTURES = {
+    "fuel": ("E. Fuel-structure DAG", FUEL_EDGES),
+    "no_weather": ("F. Expert DAG without weather -> fire", NO_WEATHER_EDGES),
+    "fuel_only": ("G. Fuel + burn history only", FUEL_ONLY_EDGES),
+}
+
 ESTIMATORS = {
     "mle": dict(kind="MaximumLikelihoodEstimator"),
     "bdeu": dict(kind="BayesianEstimator", prior_type="BDeu", equivalent_sample_size=10),
@@ -210,7 +254,7 @@ BOOTSTRAP_REPS = 1000               # CI for metrics when test ignitions are few
 # INDEPENDENCE_ALPHA = 0.05           # chi-square / G-test threshold for edge checks
 MODELS_DIR = RESULTS_DIR / "models"   # fitted CPTs, one pickle per structure x estimator
 PREDICTIONS_PATH = RESULTS_DIR / "test_predictions.parquet"
-FITTED_STRUCTURES = ("naive_bayes", "tan", "expert")   # A-C; D (latent, EM) not fitted yet
+FITTED_STRUCTURES = ("naive_bayes", "tan", "expert", "fuel", "no_weather", "fuel_only", "hillclimb")   # A-C, E-H; D (latent, EM) not fitted yet
 
 # =====================================================================
 # PHASE 6: FHSZ COMPARISON

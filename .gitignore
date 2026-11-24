@@ -46,3 +46,6 @@ Thumbs.db
 
 # Phase 5: regenerate with `python evaluate.py` (~55 MB)
 results/test_predictions.parquet
+
+# LANDFIRE sidecar files
+LF2025_*

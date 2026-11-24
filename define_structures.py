@@ -5,9 +5,11 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from config import (DISCRETE_FEATURES, EXPERT_EDGES, FIGURES_DIR, LATENT, LATENT_CARDS,
+from structure_search import hill_climb
+from config import (DISCRETE_FEATURES, EXPERIMENTAL_STRUCTURES, EXPERT_EDGES, FIGURES_DIR, LATENT, LATENT_CARDS,
                     LATENT_DAG_EDGES, LATENT_EDGES, NAIVE_BAYES_EDGES, NEG_KEEP,
-                    RESULTS_DIR, TAN_ROOT, TARGET, TRAIN_PATH)
+                    RESULTS_DIR, SPLIT_INFO_PATH, TAN_ROOT, TARGET, TRAIN_PATH,
+                    HILLCLIMB_MAX_PARENTS)
 
 GROUP_COLOR = {   # fill colours by variable group, shared by every diagram
     "weather": "#FDE2C2", "terrain": "#D9EAD3", "fuel": "#CFE2F3",
@@ -61,7 +63,7 @@ def draw(name, title, edges, highlight=(), labels=None, rankdir="TB"):
         extra = ', style="filled,dashed", penwidth=2' if n == LATENT else ""
         shape = ', shape=doubleoctagon' if n == TARGET else ""
         lines.append(f'  "{n}" [fillcolor="{GROUP_COLOR[GROUP[n]]}"{extra}{shape}];')
-    if name in ("expert", "latent"):   # keep layers readable: drivers on top, fire at bottom
+    if name in ("expert", "latent", "hillclimb", *EXPERIMENTAL_STRUCTURES):   # keep layers readable: drivers on top, fire at bottom
         lines.append('  { rank=same; "elev"; "wind"; "burn_hist"; }')
     for a, b in edges:
         style = ' [color="#C0392B", penwidth=2]' if (a, b) in highlight else ""
@@ -91,6 +93,19 @@ def main():
                 "note": f"CMI weighted by 1/{NEG_KEEP} for kept non-fire rows"},
         "expert": {"edges": [list(e) for e in EXPERT_EDGES]},   # justifications: comments in config.py
     }
+    for key, (_, edges) in EXPERIMENTAL_STRUCTURES.items():
+        structures[key] = {"edges": [list(e) for e in edges]}
+
+    # H. hill climbing with BIC, learned from training data only
+    states = json.loads(SPLIT_INFO_PATH.read_text())["states"]
+    states[TARGET] = [0, 1]
+    print("H. hill climbing (BIC):")
+    hc_edges, hc_steps, hc_score = hill_climb(train, DISCRETE_FEATURES + [TARGET], states,
+                                              max_parents=HILLCLIMB_MAX_PARENTS)
+    structures["hillclimb"] = {"edges": [list(e) for e in hc_edges],
+                               "steps": [list(h) for h in hc_steps],
+                               "bic": round(hc_score, 1),
+                               "max_parents": HILLCLIMB_MAX_PARENTS}
     for k in LATENT_CARDS:
         structures[f"latent_k{k}"] = {
             "edges": [list(e) for e in LATENT_DAG_EDGES], "latent": LATENT,
@@ -112,6 +127,10 @@ def main():
     draw("latent", 'D. Expert DAG + latent danger node (2 / 3 / 4 states, dashed)',
          [tuple(e) for e in LATENT_DAG_EDGES],
          highlight=set(LATENT_EDGES))
+
+    for key, (title, edges) in EXPERIMENTAL_STRUCTURES.items():
+        draw(key, title, edges)
+    draw("hillclimb", "H. Hill climbing with BIC (learned from 2015-2022 data)", hc_edges)
 
     print("TAN tree (parent -> child, I(X;Y|fire) in nats):")
     for e, v in tan_w.items():

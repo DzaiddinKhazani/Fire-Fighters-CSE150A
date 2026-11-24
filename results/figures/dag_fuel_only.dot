@@ -1,0 +1,33 @@
+digraph "fuel_only" {
+  rankdir=TB; labelloc=t; fontsize=20;
+  label="G. Fuel + burn history only"; fontname="Helvetica";
+  node [shape=ellipse, style=filled, fontname="Helvetica", fontsize=13];
+  edge [color="#555555", arrowsize=0.8];
+  "burn_hist" [fillcolor="#EADCF8"];
+  "elev" [fillcolor="#D9EAD3"];
+  "fire" [fillcolor="#F4CCCC", shape=doubleoctagon];
+  "rhmin" [fillcolor="#FDE2C2"];
+  "slope" [fillcolor="#D9EAD3"];
+  "tmax" [fillcolor="#FDE2C2"];
+  "veg_cover" [fillcolor="#CFE2F3"];
+  "veg_height" [fillcolor="#CFE2F3"];
+  "veg_type" [fillcolor="#CFE2F3"];
+  "wind" [fillcolor="#FDE2C2"];
+  { rank=same; "elev"; "wind"; "burn_hist"; }
+  "elev" -> "slope";
+  "elev" -> "tmax";
+  "elev" -> "veg_type";
+  "slope" -> "veg_type";
+  "burn_hist" -> "veg_type";
+  "veg_type" -> "veg_cover";
+  "veg_type" -> "veg_height";
+  "burn_hist" -> "veg_cover";
+  "tmax" -> "rhmin";
+  "wind" -> "rhmin";
+  "veg_cover" -> "veg_height";
+  "veg_type" -> "fire";
+  "veg_cover" -> "fire";
+  "veg_height" -> "fire";
+  "burn_hist" -> "fire";
+  subgraph cluster_legend { label="Legend"; fontsize=12; style=rounded; "_weather" [label="weather", fillcolor="#FDE2C2", shape=box, fontsize=10]; "_terrain" [label="terrain", fillcolor="#D9EAD3", shape=box, fontsize=10]; "_fuel" [label="fuel", fillcolor="#CFE2F3", shape=box, fontsize=10]; "_history" [label="history", fillcolor="#EADCF8", shape=box, fontsize=10]; "_target" [label="target", fillcolor="#F4CCCC", shape=box, fontsize=10]; }
+}
