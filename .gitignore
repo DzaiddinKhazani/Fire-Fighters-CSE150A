@@ -49,3 +49,9 @@ results/test_predictions.parquet
 
 # LANDFIRE sidecar files
 LF2025_*
+
+# LaTeX build files (report/)
+*.aux
+*.out
+*.synctex*
+*.toc

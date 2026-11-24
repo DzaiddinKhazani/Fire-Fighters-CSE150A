@@ -254,7 +254,7 @@ BOOTSTRAP_REPS = 1000               # CI for metrics when test ignitions are few
 # INDEPENDENCE_ALPHA = 0.05           # chi-square / G-test threshold for edge checks
 MODELS_DIR = RESULTS_DIR / "models"   # fitted CPTs, one pickle per structure x estimator
 PREDICTIONS_PATH = RESULTS_DIR / "test_predictions.parquet"
-FITTED_STRUCTURES = ("naive_bayes", "tan", "expert", "fuel", "no_weather", "fuel_only", "hillclimb")   # A-C, E-H; D (latent, EM) not fitted yet
+FITTED_STRUCTURES = ("naive_bayes", "tan", "expert", "fuel", "no_weather", "fuel_only", "hillclimb")   # A-C, E-H; D (latent, EM) is fitted by fit_latent.py
 
 # =====================================================================
 # PHASE 6: FHSZ COMPARISON

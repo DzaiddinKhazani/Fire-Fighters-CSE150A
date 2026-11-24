@@ -24,4 +24,9 @@ python evaluate.py     # test-set predictions, baselines, metrics + bootstrap CI
   343 never-seen combinations of fire's 5 parents; MLE/BDeu give those P(fire) = 0.5, which
   doubles the model's overall fire rate. See the docstring in `bn.py`.
 - Bootstrap CIs resample whole test days (cells on the same day share weather).
-- Not done yet: model D (latent node, EM), conditional-independence tests, Phase 6.
+- Model D (latent weather regime, EM): `python fit_latent.py` (fits K = 2, 3, 4 and evaluates)
+  -> `results/latent_em.md`, `results/models/latent_k*.pkl`, `results/figures/em_convergence.png`.
+- Conditional-independence tests on the expert DAG: `python independence_tests.py`
+  -> `results/independence_tests_expert.md`.
+- Report source: `report/report.tex` (figures in `report/figures/`).
+- Not done yet: Phase 6 (FHSZ comparison).
